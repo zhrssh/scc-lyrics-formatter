@@ -263,7 +263,8 @@ export function QueueApp() {
           <Logo size={40} preload />
           <div>
             <p className="text-xs font-medium tracking-[0.14em] text-ink-muted uppercase">Solace of Christ Church</p>
-            <h1 className="font-serif text-xl text-ink">Lyrics Formatter</h1>
+            <h1 className="font-serif text-xl text-ink">ProPresenter Lyrics Formatter</h1>
+            <p className="mt-0.5 text-xs text-ink-subtle">Formats output for ProPresenter and ProPresenter-compatible software.</p>
           </div>
         </div>
         <div

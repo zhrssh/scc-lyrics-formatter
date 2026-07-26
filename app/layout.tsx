@@ -18,9 +18,9 @@ const lora = Lora({
 });
 
 export const metadata: Metadata = {
-  title: "SCC Lyrics Formatter",
+  title: "SCC ProPresenter Lyrics Formatter",
   description:
-    "Format song lyrics for Solace of Christ Church — paste or upload lyrics, queue them up, and download the formatted results.",
+    "Format song lyrics for ProPresenter and ProPresenter-compatible software at Solace of Christ Church — paste or upload lyrics, queue them up, and download the formatted results.",
   authors: [{ name: "Zherish Galvin Mayordo" }],
 };
 
