@@ -21,6 +21,7 @@ export const metadata: Metadata = {
   title: "SCC Lyrics Formatter",
   description:
     "Format song lyrics for Solace of Christ Church — paste or upload lyrics, queue them up, and download the formatted results.",
+  authors: [{ name: "Zherish Galvin Mayordo" }],
 };
 
 export default function RootLayout({

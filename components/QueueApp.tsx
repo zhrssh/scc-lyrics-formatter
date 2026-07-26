@@ -457,6 +457,8 @@ export function QueueApp() {
           </div>
         </div>
       )}
+
+      <footer className="px-4 py-6 text-center text-xs text-ink-subtle">Built by Zherish Galvin Mayordo</footer>
     </div>
   );
 }

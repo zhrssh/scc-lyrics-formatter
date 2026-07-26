@@ -37,7 +37,7 @@ export function AccessGate() {
   }
 
   return (
-    <main className="flex flex-1 items-center justify-center px-4 py-12">
+    <main className="flex flex-1 flex-col items-center justify-center px-4 py-12">
       <form
         onSubmit={handleSubmit}
         className="w-full max-w-sm rounded-2xl border border-line bg-surface p-8 text-center shadow-sm"
@@ -80,6 +80,8 @@ export function AccessGate() {
           {submitting ? "Checking…" : "Enter"}
         </button>
       </form>
+
+      <p className="mt-6 text-center text-xs text-ink-subtle">Built by Zherish Galvin Mayordo</p>
     </main>
   );
 }
