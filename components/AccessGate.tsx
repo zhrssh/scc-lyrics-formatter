@@ -1,13 +1,15 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useId, useState } from "react";
+import { Logo } from "./Logo";
 
 export function AccessGate() {
   const router = useRouter();
   const [code, setCode] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const codeInputId = useId();
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
@@ -35,33 +37,49 @@ export function AccessGate() {
   }
 
   return (
-    <div className="flex flex-1 items-center justify-center px-4">
+    <main className="flex flex-1 items-center justify-center px-4 py-12">
       <form
         onSubmit={handleSubmit}
-        className="w-full max-w-sm rounded-lg border border-black/10 bg-white p-6 shadow-sm dark:border-white/10 dark:bg-zinc-900"
+        className="w-full max-w-sm rounded-2xl border border-line bg-surface p-8 text-center shadow-sm"
       >
-        <h1 className="mb-1 text-lg font-semibold">SCC Lyrics Formatter</h1>
-        <p className="mb-4 text-sm text-zinc-500">Enter the access code to continue.</p>
+        <div className="flex justify-center">
+          <Logo size={56} />
+        </div>
 
-        <input
-          type="password"
-          autoFocus
-          value={code}
-          onChange={(e) => setCode(e.target.value)}
-          placeholder="Access code"
-          className="w-full rounded-md border border-black/15 bg-transparent px-3 py-2 text-sm outline-none focus:border-black/40 dark:border-white/15 dark:focus:border-white/40"
-        />
+        <p className="mt-5 text-xs font-medium tracking-[0.14em] text-ink-muted uppercase">
+          Solace of Christ Church
+        </p>
+        <h1 className="mt-1 font-serif text-2xl text-ink">Lyrics Formatter</h1>
+        <p className="mt-2 text-sm text-ink-muted">Enter the access code to continue.</p>
 
-        {error && <p className="mt-2 text-sm text-red-600 dark:text-red-400">{error}</p>}
+        <div className="mt-6 text-left">
+          <label htmlFor={codeInputId} className="mb-1.5 block text-sm font-medium text-ink">
+            Access code
+          </label>
+          <input
+            id={codeInputId}
+            type="password"
+            autoFocus
+            value={code}
+            onChange={(e) => setCode(e.target.value)}
+            className="h-11 w-full rounded-lg border border-line-strong bg-surface px-3 text-sm text-ink transition-colors focus:border-brand"
+          />
+        </div>
+
+        {error && (
+          <p role="alert" className="mt-3 rounded-lg bg-danger-tint px-3 py-2 text-left text-sm text-danger">
+            {error}
+          </p>
+        )}
 
         <button
           type="submit"
           disabled={submitting || code.length === 0}
-          className="mt-4 w-full rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-40 dark:bg-zinc-100 dark:text-zinc-900"
+          className="mt-5 h-11 w-full rounded-lg bg-brand text-sm font-medium text-white transition-colors hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50"
         >
           {submitting ? "Checking…" : "Enter"}
         </button>
       </form>
-    </div>
+    </main>
   );
 }

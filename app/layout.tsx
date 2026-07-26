@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Geist, Geist_Mono, Lora } from "next/font/google";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -12,9 +12,15 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+const lora = Lora({
+  variable: "--font-lora",
+  subsets: ["latin"],
+});
+
 export const metadata: Metadata = {
   title: "SCC Lyrics Formatter",
-  description: "Queue lyrics for formatting and download the results.",
+  description:
+    "Format song lyrics for Solace of Christ Church — paste or upload lyrics, queue them up, and download the formatted results.",
 };
 
 export default function RootLayout({
@@ -25,9 +31,17 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${geistSans.variable} ${geistMono.variable} ${lora.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col">{children}</body>
+      {/*
+        Extensions (Grammarly, password managers, Dark Reader) stamp attributes
+        onto <body> before React hydrates, which reads as a mismatch. Suppressing
+        here covers this element only — it does not mask mismatches in our own
+        components, which nest deeper.
+      */}
+      <body className="min-h-full flex flex-col" suppressHydrationWarning>
+        {children}
+      </body>
     </html>
   );
 }

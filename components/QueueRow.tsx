@@ -22,18 +22,25 @@ function sourceLabel(item: QueueItem): string {
   return item.source.kind === "file" ? item.source.fileName : "Pasted";
 }
 
-function statusLabel(status: ItemResult["status"] | "idle"): { text: string; className: string } {
+type StatusTone = "waiting" | "success" | "danger";
+
+const TONE_CLASSES: Record<StatusTone, string> = {
+  waiting: "bg-waiting-tint text-waiting",
+  success: "bg-success-tint text-success",
+  danger: "bg-danger-tint text-danger",
+};
+
+function statusInfo(status: ItemResult["status"] | "idle"): { text: string; tone: StatusTone } {
   switch (status) {
     case "running":
-      return { text: "Running…", className: "text-amber-600 dark:text-amber-400" };
+      return { text: "Formatting…", tone: "waiting" };
     case "done":
-      return { text: "Done", className: "text-green-600 dark:text-green-400" };
+      return { text: "Ready", tone: "success" };
     case "error":
-      return { text: "Failed", className: "text-red-600 dark:text-red-400" };
+      return { text: "Needs another try", tone: "danger" };
     case "queued":
-      return { text: "Queued", className: "text-zinc-500" };
     default:
-      return { text: "Not submitted", className: "text-zinc-400" };
+      return { text: "Waiting", tone: "waiting" };
   }
 }
 
@@ -58,7 +65,7 @@ export function QueueRow({
 }: QueueRowProps) {
   const [copiedFile, setCopiedFile] = useState<string | null>(null);
   const isPaste = item.source.kind === "paste";
-  const status = statusLabel(result?.status ?? "idle");
+  const status = statusInfo(result?.status ?? "idle");
 
   async function handleCopy(file: ResolvedFile) {
     await navigator.clipboard.writeText(file.content);
@@ -67,21 +74,27 @@ export function QueueRow({
   }
 
   return (
-    <li className="rounded-lg border border-black/10 p-4 dark:border-white/10">
+    <li className="rounded-xl border border-line bg-surface p-4 shadow-sm">
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
-          <span className="inline-block rounded bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">
+          <span className="inline-block rounded-full bg-brand-tint px-2.5 py-0.5 text-xs font-medium text-brand-text">
             {isPaste ? "Pasted block" : "File"}
           </span>
-          <p className="mt-1 truncate text-sm font-medium">{sourceLabel(item)}</p>
+          <p className="mt-1.5 truncate text-sm font-medium text-ink">{sourceLabel(item)}</p>
         </div>
-        <div className="flex shrink-0 items-center gap-3">
-          <span className={`text-xs font-medium ${status.className}`}>{status.text}</span>
+        <div className="flex shrink-0 items-center gap-2">
+          <span
+            className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${TONE_CLASSES[status.tone]}`}
+          >
+            <span className="h-1.5 w-1.5 rounded-full bg-current" />
+            {status.text}
+          </span>
           <button
             type="button"
             onClick={onRemove}
             disabled={disabled}
-            className="text-xs text-zinc-400 hover:text-red-600 disabled:opacity-40"
+            aria-label={`Remove ${sourceLabel(item)} from the queue`}
+            className="inline-flex min-h-11 items-center rounded-lg px-2 text-xs text-ink-subtle hover:text-danger disabled:cursor-not-allowed disabled:opacity-50"
           >
             Remove
           </button>
@@ -89,9 +102,7 @@ export function QueueRow({
       </div>
 
       {item.blockedReason && (
-        <p className="mt-2 rounded bg-amber-50 px-2 py-1 text-xs text-amber-700 dark:bg-amber-950 dark:text-amber-400">
-          {item.blockedReason}
-        </p>
+        <p className="mt-2 rounded-lg bg-waiting-tint px-3 py-2 text-xs text-waiting">{item.blockedReason}</p>
       )}
 
       {isPaste ? (
@@ -100,21 +111,22 @@ export function QueueRow({
           onChange={(e) => onEditText(e.target.value)}
           disabled={disabled}
           rows={4}
-          className="mt-2 w-full resize-y rounded-md border border-black/10 bg-transparent p-2 font-mono text-xs disabled:opacity-60 dark:border-white/10"
+          aria-label="Edit pasted lyrics"
+          className="mt-2 w-full resize-y rounded-lg border border-line-strong bg-surface p-2.5 font-mono text-xs text-ink transition-colors focus:border-brand disabled:opacity-60"
         />
       ) : (
-        <pre className="mt-2 max-h-32 overflow-auto whitespace-pre-wrap rounded-md bg-zinc-50 p-2 font-mono text-xs text-zinc-600 dark:bg-zinc-950 dark:text-zinc-400">
+        <pre className="mt-2 max-h-32 overflow-auto whitespace-pre-wrap rounded-lg bg-surface-sunken p-2.5 font-mono text-xs text-ink-muted">
           {item.text.length > 0 ? item.text : "(no text extracted)"}
         </pre>
       )}
 
       {result?.status === "error" && (
-        <div className="mt-2 flex items-center justify-between gap-2 rounded bg-red-50 px-2 py-1.5 dark:bg-red-950/40">
-          <p className="text-xs text-red-700 dark:text-red-400">{result.error}</p>
+        <div className="mt-2 flex items-center justify-between gap-3 rounded-lg border-l-4 border-danger bg-danger-tint px-3 py-2">
+          <p className="text-xs text-danger">{result.error}</p>
           <button
             type="button"
             onClick={onRetry}
-            className="shrink-0 rounded bg-red-600 px-2 py-1 text-xs font-medium text-white hover:bg-red-700"
+            className="inline-flex min-h-11 shrink-0 items-center rounded-lg bg-brand px-3 text-xs font-medium text-white hover:bg-brand-hover"
           >
             Retry
           </button>
@@ -122,29 +134,34 @@ export function QueueRow({
       )}
 
       {resolvedFiles.length > 0 && (
-        <ul className="mt-3 space-y-2">
+        <ul className="mt-3 flex flex-col gap-2">
           {resolvedFiles.map((file) => (
-            <li key={file.filename} className="rounded-md border border-black/10 dark:border-white/10">
-              <div className="flex items-center justify-between gap-2 border-b border-black/10 px-2 py-1 dark:border-white/10">
-                <span className="truncate text-xs font-medium">{file.filename}</span>
-                <div className="flex shrink-0 gap-2">
+            <li key={file.filename} className="rounded-lg border border-line">
+              <div className="flex items-center justify-between gap-2 border-b border-line px-3 py-2">
+                <span className="truncate text-xs font-medium text-ink">{file.filename}</span>
+                <div className="flex shrink-0 gap-1">
                   <button
                     type="button"
                     onClick={() => handleCopy(file)}
-                    className="text-xs text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100"
+                    aria-label={`Copy ${file.filename}`}
+                    className="inline-flex min-h-11 items-center rounded-lg px-2.5 text-xs text-ink-muted hover:text-ink"
                   >
                     {copiedFile === file.filename ? "Copied!" : "Copy"}
                   </button>
                   <button
                     type="button"
                     onClick={() => downloadFile(file)}
-                    className="text-xs text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100"
+                    aria-label={`Download ${file.filename}`}
+                    className="inline-flex min-h-11 items-center rounded-lg px-2.5 text-xs text-ink-muted hover:text-ink"
                   >
                     Download
                   </button>
                 </div>
               </div>
-              <pre className="max-h-56 overflow-auto whitespace-pre-wrap p-2 font-mono text-xs">
+              <div aria-live="polite" className="sr-only">
+                {copiedFile === file.filename ? `${file.filename} copied to clipboard.` : ""}
+              </div>
+              <pre className="max-h-56 overflow-auto whitespace-pre-wrap p-3 font-mono text-xs text-ink">
                 {file.content}
               </pre>
             </li>

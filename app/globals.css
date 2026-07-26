@@ -1,26 +1,48 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+@theme {
+  --color-canvas: #fdf8f5;
+  --color-surface: #ffffff;
+  --color-surface-sunken: #faf4f0;
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
+  --color-ink: #2e2724;
+  --color-ink-muted: #6b5b54;
+  --color-ink-subtle: #857069;
+
+  --color-line: #eadfd8;
+  --color-line-strong: #dcc9be;
+
+  --color-brand: #d83b3c;
+  --color-brand-hover: #c43a2d;
+  --color-brand-text: #b93326;
+  --color-brand-accent: #e55e47;
+  --color-brand-soft: #f07a50;
+  --color-brand-pale: #f6a07b;
+  --color-brand-tint: #fdefea;
+
+  --color-danger: #8f2a1f;
+  --color-danger-tint: #fbedea;
+  --color-success: #2f6b4f;
+  --color-success-tint: #e9f2ec;
+  --color-waiting: #8a5a12;
+  --color-waiting-tint: #fbf0df;
+
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+  --font-serif: var(--font-lora);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+:root {
+  color-scheme: light;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-brand);
+  outline-offset: 2px;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
+  background: var(--color-canvas);
+  color: var(--color-ink);
   font-family: var(--font-sans), Arial, Helvetica, sans-serif;
 }

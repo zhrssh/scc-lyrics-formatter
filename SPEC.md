@@ -1,251 +1,233 @@
-# SCC Lyrics Formatter — Spec
+# SCC Lyrics Formatter — Design Spec
+
+> This spec covers the app's **visual and interaction design**. Its functional design — the
+> item model, the n8n contract, guardrails, retry classification, persistence, and testing
+> decisions — was settled in the v1 build and is unchanged. That spec is preserved at
+> [`docs/archive/v1-build/SPEC.md`](docs/archive/v1-build/SPEC.md) and remains the reference
+> for how the app *behaves*. See [Unchanged from v1](#unchanged-from-v1).
 
 ## Problem Statement
 
-Someone preparing lyrics for a service has songs scattered across pasted text and PDF or
-text files, in inconsistent shapes. Getting them into a consistent, usable format is manual,
-repetitive work done one song at a time.
+The app works. Every user story from the v1 build ships. But it looks like the scaffolding it
+grew out of: default Geist type, zinc greys, no logo, no colour that means anything, and a
+dark-mode branch nobody asked for and nobody designed.
 
-The formatting intelligence already has a home — an n8n workflow. What's missing is a way to
-feed it work and get results back. Without a client, the operator has no way to submit a
-dozen songs at once, no way to see whether the output is right before saving it, and no way
-to recover the good results when one song fails.
+That matters more here than it would for an internal tool, because the person using it is not
+an operator in the abstract — it's a volunteer on the worship team, on a Saturday, preparing
+Sunday's songs. They may open this three times a year. They may open it on a phone. The
+current UI gives them nothing to recognise and no sense of where to start: three unlabelled
+regions stacked vertically, a "Submit queue" button that sounds like a database operation, and
+a "Clear batch" link in the top-right that silently destroys results if it's misclicked.
+
+The church also has an identity — a logo and a palette — that the app does not use at all.
 
 ## Solution
 
-A web app that acts as the front door to the n8n workflow.
+A warm, light-only design system derived from the church's own logo palette, applied across
+all three components, plus the lightest UX polish that makes the tool self-explanatory to
+someone who isn't technical.
 
-The operator builds a **queue** of items — each pasted block of lyrics is one item, each
-uploaded file is one item, and a single queue can mix both. Submitting the queue sends every
-item to n8n independently, so progress is visible per item and a failure is contained to the
-item that caused it.
+The direction is **warm sanctuary**: a cream canvas rather than clinical white, white cards
+with soft shadows, a serif for headings, generous whitespace, and a single scarlet accent
+carrying the primary action. Calm and welcoming rather than energetic — the logo sits on it
+naturally, and long passages of lyrics stay comfortable to read.
 
-n8n returns formatted lyrics as one or more named text files per item. The operator sees each
-result as a preview that preserves the formatting exactly, then downloads individual files or
-the whole batch as a zip. Results survive a page refresh, so an accidental reload doesn't
-discard several minutes of work.
+The polish is deliberately narrow. The flow does not change: paste or drop, review the queue,
+format, download. What changes is that the flow is now *numbered and named*, the queue tells
+you plainly what state each song is in, the destructive action asks first, the primary action
+is reachable on a phone, and every control can be reached and seen by keyboard.
+
+**No application logic changes.** `lib/` and `app/api/` are untouched, and the existing test
+suite must pass unmodified. If a test breaks, the redesign has overstepped.
 
 ## User Stories
 
-1. As an operator, I want to paste lyrics into a text box, so that I can format a song I copied from somewhere without saving it to a file first.
-2. As an operator, I want to add several pasted blocks to one queue, so that I can format multiple songs in a single run.
-3. As an operator, I want to upload a `.txt` file, so that I can format lyrics I already have on disk.
-4. As an operator, I want to upload a `.pdf` file, so that I can format lyrics from a document someone sent me.
-5. As an operator, I want to upload several files at once, so that I don't have to add them one at a time.
-6. As an operator, I want to mix pasted blocks and uploaded files in the same queue, so that I don't have to run two separate batches for one service.
-7. As an operator, I want to see each queued item as its own row, so that I understand exactly how many units of work I'm about to submit.
-8. As an operator, I want to see where each queued item came from, so that I can tell a pasted block apart from an uploaded file at a glance.
-9. As an operator, I want to remove an item from the queue before submitting, so that I can correct a mistake without starting over.
-10. As an operator, I want to edit a pasted block after adding it, so that I can fix a typo without deleting and re-adding the item.
-11. As an operator, I want to see the text extracted from an uploaded file, so that I can confirm the file was read correctly before spending a formatting run on it.
-12. As an operator, I want to be told when a PDF contains no readable text, so that I don't submit a scanned document that cannot possibly succeed.
-13. As an operator, I want files of unsupported types to be rejected with a message naming what is supported, so that I know what to do instead of guessing.
-14. As an operator, I want to submit the whole queue with one action, so that I can start the run and step away.
-15. As an operator, I want to see per-item progress while the batch runs, so that I know the app is working and roughly how far along it is.
-16. As an operator, I want items that finish early to show their results immediately, so that I can start reviewing before the whole batch completes.
-17. As an operator, I want a formatted result shown as a preview with its spacing and line breaks intact, so that I can judge whether the formatting is correct before saving it.
-18. As an operator, I want one item to be able to produce several result files, so that a document containing several songs comes back as several songs.
-19. As an operator, I want each result file to show its filename, so that I know what I'm about to save.
-20. As an operator, I want to download a single result file, so that I can grab just the one song I need.
-21. As an operator, I want to copy a result to the clipboard, so that I can paste it straight into another tool without a round trip through my filesystem.
-22. As an operator, I want to download every result in the batch as one zip, so that saving twenty songs takes one action rather than twenty.
-23. As an operator, I want result files with clashing names to be made unique automatically, so that saving a batch doesn't silently overwrite one song with another.
-24. As an operator, I want a transient network failure to be retried automatically, so that a momentary blip doesn't turn into an error I have to act on.
-25. As an operator, I want an item that genuinely fails to show me its error message, so that I can tell a bad input apart from a broken service.
-26. As an operator, I want to retry a single failed item, so that I don't have to re-run and re-pay for the items that already succeeded.
-27. As an operator, I want the rest of the batch to complete when one item fails, so that one bad song doesn't cost me the whole run.
-28. As an operator, I want my results to still be there after an accidental page refresh, so that I don't lose work I already waited for.
-29. As an operator, I want to be stopped before submitting an unreasonably large batch, so that a mis-drop of a whole folder doesn't cost a fortune in formatting runs.
-30. As an operator, I want to know which limit I exceeded and by how much, so that I can fix the queue rather than guess.
-31. As an operator, I want to enter an access code once and stay signed in, so that I'm not re-authenticating on every visit.
-32. As the owner, I want the app gated behind an access code, so that a stranger who finds the URL can't run up my costs.
-33. As the owner, I want the n8n webhook URL and its secret held only on the server, so that they can't be extracted from the browser and used directly.
-34. As the owner, I want concurrent requests to n8n capped, so that a large batch doesn't overwhelm the workflow instance.
-35. As the owner, I want a malformed n8n response to surface a clear error naming the problem, so that I can fix the workflow instead of debugging the UI.
-36. As the owner, I want a documented request and response contract, so that I can build the n8n workflow against a fixed target.
-37. As a developer, I want the app to run fully without a live n8n instance, so that I can build and verify every state before the workflow exists.
-38. As a developer, I want the mock to produce failures and multi-file responses sometimes, so that error handling and multi-file rendering are exercised rather than assumed.
-39. As a developer, I want limits and concurrency in one config module, so that tuning them once real throughput is known is a single edit.
-40. As an operator, I want to clear the batch and start a new one, so that a fresh service doesn't inherit the previous run's results.
+1. As a volunteer, I want the church's logo and colours on the page, so that I can tell at a glance this tool belongs to my church and isn't something I've landed on by mistake.
+2. As a volunteer, I want the page to show me numbered steps, so that I know where to start without being told.
+3. As a volunteer, I want buttons labelled in plain language, so that I don't have to guess whether "Submit queue" is the thing that formats my songs.
+4. As a volunteer, I want each song in the queue to say plainly whether it's waiting, being formatted, ready, or failed, so that I can read the state of a batch without decoding colours.
+5. As a volunteer, I want to be asked before clearing everything, so that a misclick doesn't destroy results I waited minutes for.
+6. As a volunteer, I want the empty queue to tell me what to do next, so that a blank page doesn't read as something being broken.
+7. As a volunteer on a phone, I want the format and download actions reachable without scrolling to the bottom of a long queue, so that a batch of twenty songs doesn't bury the button I need.
+8. As a volunteer using a keyboard, I want to see which control I'm on, so that I can work through the page without a mouse.
+9. As a volunteer using a screen reader, I want to be told when the batch finishes and when a result is copied, so that I'm not waiting on a change I can't see.
+10. As a volunteer, I want every label and message to be comfortably readable, so that low-contrast grey text isn't the reason I mis-set something.
+11. As a volunteer, I want an error to look clearly like an error, so that I don't mistake a failure notice for the app's ordinary branding.
+12. As a volunteer, I want formatted lyrics shown with their spacing and line breaks exactly as they'll be saved, so that the preview is worth trusting.
+13. As the owner, I want the app to look the same for everyone, so that I'm not maintaining a second theme I never designed.
 
 ## Implementation Decisions
 
-### Architecture
+### Direction and typography
 
-- Next.js App Router client. All formatting intelligence lives in n8n; the app is transport,
-  presentation, and guardrails only.
-- The browser never contacts n8n directly. A server route handler holds the webhook URL and
-  shared secret, so neither is retrievable from client code.
+- **Warm sanctuary**, light only. A cream `#FDF8F5` canvas with white cards, not white-on-white.
+- **Lora** for headings — a warm, calligraphic-rooted serif that reads as welcoming rather
+  than corporate, without tipping into the formality of a hymnal face.
+- **Geist Sans** is retained for all UI text. It's already loaded; adding a second body face
+  would cost weight for no gain.
+- **Geist Mono is retained for every piece of lyric text** — the paste box, extracted-text
+  previews, and formatted results. This is not stylistic. The v1 spec requires previews to
+  preserve formatting exactly, and a proportional face silently misrepresents alignment and
+  indentation the operator is being asked to judge.
 
-### The item model
+### The palette is not usable as supplied
 
-- **One input unit is one item.** A pasted block is one item; an uploaded file is one item,
-  regardless of how many songs it contains.
-- **One item is one request to n8n.** Requests fan out with a concurrency cap rather than
-  being batched into a single long-running call. This keeps every request well inside the
-  hosting platform's function duration limit, gives each item independent progress and retry,
-  and contains failure to the item that caused it.
-- **One item may produce many files.** Splitting a multi-song document into separate songs is
-  n8n's responsibility, not the client's. The client applies no boundary-detection heuristics.
-  This is deliberate: guessing wrong on a real songsheet is worse than not guessing.
+The church palette is five warm tones and white: `#F6A07B` tangerine-dream, `#F07A50`
+burnt-peach, `#E55E47` fiery-terracotta, `#D83B3C` scarlet-rush, `#FEFEFE` white. It contains
+no neutral and no accessible text colour. Measured against the `#FDF8F5` canvas:
 
-### Text extraction
+| Pair | Ratio | Verdict |
+| --- | --- | --- |
+| White on `#E55E47` fiery-terracotta | 3.49 | ✗ fails AA |
+| White on `#F07A50` burnt-peach | 2.76 | ✗ fails |
+| White on `#F6A07B` tangerine-dream | 2.05 | ✗ fails |
+| White on `#D83B3C` scarlet-rush | **4.55** | ✓ AA |
+| `#E55E47` as text on cream | 3.31 | ✗ small text; ✓ large/decorative only |
 
-- PDF and text extraction happens **in the browser**, before submission. Only extracted text
-  crosses the network.
-- Consequence: request bodies stay in the kilobytes regardless of source file size, so
-  platform body-size limits are never a factor even for large PDFs.
-- Consequence: the n8n webhook has exactly one input shape — text. Pasted and uploaded items
-  are indistinguishable by the time they reach it.
-- PDF parsing is lazy-loaded, so the cost is paid only by users who upload a PDF.
-- A PDF with no text layer (scanned or photographed) extracts to an empty string. This is
-  detected at queue time and reported as such. It is never submitted.
-- Accepted types are `.pdf` and `.txt`. Anything else is rejected at selection time.
+Consequences, and they are load-bearing:
 
-### API contract
+- **`#D83B3C` scarlet-rush is the only supplied colour that can carry white text**, so it is
+  the primary fill. Every labelled primary button is this colour.
+- **The three lighter tones are decorative only.** They appear in the header's gradient
+  hairline, drag-over tints, and badge washes. They are never a text colour, and never a
+  button fill with a label on top of it.
+- The ink scale is invented, not supplied — warm browns rather than neutral greys, so text
+  doesn't read as cold against cream.
 
-Client to route handler, one call per item:
+### Brand red and error red must not collide
+
+The brand is red. The error state is also red. Left alone, a failure notice reads as
+branding, and a branded button reads as a warning.
+
+Errors are therefore given a deeper, browner maroon (`#8F2A1F`) that is visibly not the
+brand scarlet, plus a left-border accent, so failure is distinguished by weight and shape and
+not by hue alone. Success and in-progress states are pulled off the brand hue entirely —
+green and amber — for the same reason.
+
+Status is never communicated by colour alone. Every status pill carries its own text label.
+
+### Design tokens
+
+Defined once in `app/globals.css` as a Tailwind v4 `@theme` block. Measured ratios are
+against the cream canvas.
 
 ```
-POST /api/format
-{ text: string, sourceName: string }
+Canvas       --color-canvas         #FDF8F5   warm cream page background
+             --color-surface        #FFFFFF   cards
+             --color-surface-sunken #FAF4F0   read-only panes, previews
+
+Ink          --color-ink            #2E2724   body text          13.9:1 ✓
+             --color-ink-muted      #6B5B54   secondary text      6.1:1 ✓
+             --color-ink-subtle     #857069   meta / large only   4.4:1
+
+Lines        --color-line           #EADFD8
+             --color-line-strong    #DCC9BE
+
+Brand        --color-brand          #D83B3C   primary fill, white text 4.55:1 ✓
+             --color-brand-hover    #C43A2D   hover / pressed          5.26:1 ✓
+             --color-brand-text     #B93326   brand-coloured TEXT      5.59:1 ✓
+             --color-brand-accent   #E55E47   decorative fills only
+             --color-brand-soft     #F07A50   decorative only
+             --color-brand-pale     #F6A07B   decorative only
+             --color-brand-tint     #FDEFEA   badge / hover wash
+
+Semantics    --color-danger         #8F2A1F   + --color-danger-tint  #FBEDEA
+             --color-success        #2F6B4F   + --color-success-tint #E9F2EC
+             --color-waiting        #8A5A12   + --color-waiting-tint #FBF0DF
 ```
 
-Route handler to n8n: the same body, plus the shared secret as a header.
+### Light only
 
-n8n response envelope:
+The dark-mode branch is removed, not rewritten. It was inherited from the scaffold, never
+designed, and applied as scattered `dark:` utilities with no dark palette behind them. A warm
+dark theme is a genuine design problem — the cream, the tints, and the decorative tones all
+need re-deriving — and maintaining two themes doubles the surface on which this small tool can
+look wrong. `color-scheme: light` is declared so browsers stop auto-theming form controls.
 
-```
-{ files: [{ filename: string, content: string }] }
-```
+### The logo asset needs work before it can be used
 
-- The envelope is JSON rather than raw bytes because one item can yield several files, and a
-  single HTTP body cannot carry several files without zipping or multipart — both of which
-  would block the preview.
-- `content` is the formatted lyrics as plain text. The client builds the downloadable `.txt`
-  from it locally; no file bytes ever transit the network.
-- The response is validated at the boundary. A malformed envelope produces an error naming
-  the offending field, not a crash inside the UI.
-- The request carries no formatting options. The transformation is fixed and owned entirely
-  by the workflow, so changing it requires no client change.
-- The contract is documented separately so the n8n workflow can be built against it.
+`app/scc.png` is 2048×2048, **RGB with an opaque white background**. Two measured facts
+determine how it's handled:
 
-### Failure handling
+- The mark's bounding box is `(460, 624) → (1588, 1524)` — it occupies only **55% of the
+  width and 44% of the height**. Placed as-is at a 40px box, the visible mark is roughly
+  20px, adrift in padding. It must be cropped to its bounding box before use.
+- A flood fill from the image edges reaches **all 3,598,977 white pixels**, including the
+  cross. The cross is an open knockout whose stem runs off the bottom of the figure, not an
+  enclosed shape.
 
-- Retries are **classified, not blanket**. Network errors and 5xx responses are retried once,
-  silently. 4xx responses and validation failures are never retried — they will fail
-  identically and a retry only wastes a formatting run.
-- An item still failing after its automatic retry becomes an error row showing the message,
-  with a manual retry that re-runs only that item.
-- A failing item never affects its siblings. The batch completes around it.
+So converting white to transparent is safe and is what the mark intends: the cross renders in
+whatever colour sits behind it, cream on the canvas and white on a card. Both read correctly.
+The browser-tab icon is the exception — it keeps an **opaque** cream background, so the
+knockout doesn't pick up dark browser chrome and lose the cross.
 
-### Access control
+Two derived assets are generated from the source, which is left untouched:
 
-- A single shared access code, verified server-side and held in an httpOnly cookie.
-- Chosen over per-user accounts because it stops drive-by abuse without introducing an auth
-  provider or a database. It is weak against a leaked code, which is proportionate for an
-  internal tool.
+- `public/scc-logo.png` — cropped, transparent, for in-page use.
+- `app/icon.png` — cropped, squared on opaque cream, for the browser tab. The stock
+  `app/favicon.ico` is deleted; leaving both would emit two competing `<link rel="icon">` tags.
 
-### State and persistence
+### Framework notes
 
-- The current batch is held in `sessionStorage`: it survives a refresh or accidental
-  navigation and clears when the tab closes.
-- No database. Nothing is persisted server-side; the app is stateless between requests apart
-  from the access cookie.
+Per `AGENTS.md`, this Next.js release diverges from widely-known conventions. Relevant here:
+`<Image>`'s `priority` prop is **deprecated in favour of `preload`** as of Next.js 16.
 
-### Guardrails
+### Accessibility floor
 
-All limits live in one config module so they can be tuned in a single edit once real n8n
-throughput is known. Initial values: 20 items per batch, 10MB per file, ~50,000 characters
-per item, 3 concurrent requests.
+- Every text pair meets WCAG AA — 4.5:1 for body text, 3:1 for large or decorative elements.
+  `--color-ink-subtle` at 4.4:1 is for large text and non-essential meta only.
+- One shared `:focus-visible` rule, so a visible focus ring can't be forgotten per component.
+  The access-code input's current `outline-none` — which removes the ring with no replacement
+  — is a real defect and is fixed.
+- The paste box and the access-code input get real `<label>` elements. Placeholders are not
+  labels; they vanish on the first keystroke.
+- Tap targets are at least 44px. No horizontal scroll at 320px.
+- Batch completion and copy confirmation are announced via `aria-live="polite"`.
 
-### Result handling
+## Unchanged from v1
 
-- Filenames returned by n8n are sanitised (path separators and control characters stripped)
-  and de-duplicated across the batch with numeric suffixes, so no result silently overwrites
-  another on download.
-- Bulk download zips in the browser. Triggering many sequential downloads is unreliable —
-  browsers prompt for permission and drop files past roughly ten — so a zip is the only
-  approach that scales to the batch sizes this app is built for. The zip library is
-  lazy-loaded on first use.
+Out of scope for this spec, and unchanged — see
+[`docs/archive/v1-build/SPEC.md`](docs/archive/v1-build/SPEC.md):
 
-### Development without n8n
-
-When the webhook URL is unconfigured, the route handler serves a mock formatter with a
-realistic delay that sometimes fails and sometimes returns several files. Every UI state —
-in-flight, partial failure, retry, multi-file results, zip download — is therefore reachable
-before the workflow exists.
-
-### Hosting
-
-Deployed to Vercel. The route handler declares an explicit max duration, and the outbound
-fetch has a timeout set below it, so a slow item fails with a legible message rather than a
-dead connection. Values assume the Hobby plan's 60-second function limit.
-
-## Testing Decisions
-
-**What makes a good test here:** it exercises observable behaviour through a module's public
-interface. A test that asserts how many times an internal helper was called, or reaches into
-component internals, is testing implementation and will break on every refactor. Tests should
-survive a rewrite of the code they cover.
-
-**One seam.** The batch runner takes its submit function as a dependency:
-
-```ts
-runBatch(items, { submit, concurrency })
-```
-
-Injecting a fake `submit` makes the interesting behaviour testable with no network, no DOM,
-and no timers beyond fake ones. This is the only seam introduced. Everything else worth
-testing is a pure function that needs none.
-
-**Modules under test:**
-
-- **Batch runner** — respects the concurrency cap; results are independent; one failing item
-  doesn't stop the others; retry re-runs only the item asked for.
-- **Retry classification** — network errors and 5xx are eligible; 4xx and validation failures
-  are not. This is a pure predicate and the most cost-sensitive rule in the app.
-- **Response validation** — well-formed envelopes parse; each malformed shape produces an
-  error naming the offending field.
-- **Filename handling** — sanitisation strips dangerous characters; collisions across a batch
-  resolve to distinct names.
-- **Limit checks** — each guardrail rejects at its boundary and reports which limit was
-  exceeded.
-
-**Not tested:** React components, the route handler, and PDF extraction. The first two are
-thin enough that tests would assert framework behaviour; the third is a wrapper around a
-third-party parser whose real failure modes are actual PDFs, which a unit test can't
-meaningfully supply.
-
-**Prior art:** none — this is the repo's first test suite. Vitest, colocated `*.test.ts`
-files, no component testing library.
+- The item model: one input unit is one item, one item is one request, one item may produce
+  many files.
+- Browser-side PDF and text extraction, and the accepted-types rule.
+- The n8n request/response contract, also documented at [`docs/n8n-contract.md`](docs/n8n-contract.md).
+- Classified retry, per-item failure containment, and manual retry.
+- The access-code gate and its httpOnly cookie.
+- `sessionStorage` persistence and the `useSyncExternalStore` approach that makes hydration
+  match. This is deliberate and documented in `CHANGELOG.md` — a mount-effect restore was
+  tried first and rejected. It is not to be refactored.
+- All guardrail limits and the single config module holding them.
+- Filename sanitisation, de-duplication, and browser-side zipping.
+- The mock formatter, and the test suite with the batch runner as its one seam.
 
 ## Out of Scope
 
-- The n8n workflow itself, including all formatting logic and song-boundary splitting.
-- Any output format other than plain text.
-- Editing formatted results in the browser.
-- `.docx`, `.md`, `.rtf`, and other input formats.
-- OCR or any handling of scanned PDFs beyond detecting and reporting them.
-- Per-user accounts, roles, or an audit trail.
-- Server-side persistence, cross-device access, and shareable result links.
-- Batch history beyond the current session.
-- User-selectable formatting styles or presets.
-- Client-side song-boundary detection.
+- Dark mode, in any form.
+- A component library or extracted design-system package. Three components do not justify one.
+- Animation beyond simple colour and shadow transitions.
+- Any change to `lib/`, `app/api/`, the n8n contract, or the config limits.
+- New functional behaviour. Nothing in this spec adds a capability the app doesn't have.
+- Redesigning the logo itself. The supplied mark is cropped and made transparent, never redrawn.
+- A marketing or landing page. This is a tool, entered through the access gate.
+- Component-level tests for the redesigned UI. The v1 spec's reasoning still holds — these
+  components are thin, and tests would assert framework behaviour.
 
 ## Further Notes
 
-**The latency estimate is unverified.** Everything is sized on an expectation of 5–30 seconds
-per formatting run, for a workflow that does not exist yet. If real calls land beyond the
-platform's function limit, the operator sees a failure after the formatting run has already
-been paid for. Mock mode cannot surface this — only the first real request can. The fallback
-is a submit-and-poll model, which requires server-side job state and therefore a database.
+**The palette constrains the design more than it appears to.** Four of the five supplied
+colours can't carry text. If a future change wants a second labelled colour — a distinct
+secondary button, say, or a coloured link — it needs a new value derived for contrast, not
+another pick from the palette. The `--color-brand-text` token exists for exactly this reason.
 
-**Song splitting is load-bearing on the n8n side.** The client is deliberately incapable of
-detecting song boundaries. If the workflow returns one merged file where the operator expected
-five, that is a workflow change, and the client has no way to detect the discrepancy or warn
-about it.
+**The knockout cross depends on its background.** The transparent logo is correct on cream and
+on white. Placed on a busy or dark surface — a photo header, a coloured banner — the cross
+fills with that surface and the mark stops reading. Any future use outside the two designed
+surfaces needs the opaque variant instead.
 
-**Next.js version.** This project uses a Next.js release with breaking changes relative to
-widely-known conventions. Per `AGENTS.md`, the relevant guides under `node_modules/next/dist/docs/`
-must be read before writing code in an unfamiliar area.
+**"Light UX polish" is a boundary, not a mood.** The flow, the state model, and the handlers
+are untouched; the numbered steps describe the existing three regions rather than introducing
+new ones. A restructure into genuine multi-step navigation was considered and deliberately not
+taken — it would change what the components do, and the current single-page flow is right for
+a batch you want to see all of at once.

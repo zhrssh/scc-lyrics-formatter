@@ -115,3 +115,128 @@ All notable changes to this project, in the order they were built.
 - Corrupt/unparseable stored state, and a full storage quota, both degrade
   silently to a clean/unpersisted session rather than crashing.
 - Clearing the batch removes the persisted state as well as in-memory state.
+
+## Redesign — planning
+
+### Spec and tracker reset
+
+- The v1 build is complete; its spec and its nine tickets moved to
+  `docs/archive/v1-build/` (via `git mv`, so history follows them). That spec
+  remains the reference for the app's functional design — item model, n8n
+  contract, retry classification, guardrails, persistence, testing decisions —
+  none of which the redesign changes.
+- New root `SPEC.md` covers the app's visual and interaction design: the
+  "warm sanctuary" direction, light-only, Lora headings with Geist Sans for UI
+  and Geist Mono retained for all lyric text.
+- New tickets `.issues/01`–`06`, renumbered from `01`: design tokens, brand
+  assets, access gate, queue page shell, queue row, and a final accessibility
+  and responsive pass.
+
+### Two research findings that constrained the design
+
+- **The supplied palette cannot be used as given.** Measured against the
+  `#FDF8F5` canvas, four of its five colours fail WCAG AA behind white text —
+  only `#D83B3C` scarlet-rush reaches 4.55:1. It becomes the primary fill; the
+  three lighter tones are decorative only, never a text colour and never a
+  button fill with a label on it. The ink scale is invented, since the palette
+  supplies no neutral. Errors are pushed to a browner maroon so failure never
+  reads as branding.
+- **The logo needs preparing before use.** `app/scc.png` is 2048² with an
+  opaque white background, and the mark fills only 55% × 44% of it, so it must
+  be cropped. A flood fill from the edges reaches every white pixel including
+  the cross — it is an open knockout, not an enclosed shape — which makes
+  white→transparent correct for in-page use (the cross shows the surface
+  behind it) and wrong for the tab icon, which keeps an opaque background.
+
+No source files changed in this step. The tickets describe the work; they do
+not do it.
+
+## Redesign — implementation
+
+### 01 — Design tokens and light-only theme
+
+- `app/globals.css`: the SCSS variable dump and the `@media
+  (prefers-color-scheme: dark)` block are gone, replaced by a single `@theme`
+  block holding every token from `SPEC.md` — canvas/surface/sunken, the ink
+  scale, line tones, the full brand ramp, and the danger/success/waiting
+  pairs. `npm run build` now reports zero CSS warnings, down from 24.
+- One global `:focus-visible` rule draws a 2px brand outline with a 2px
+  offset, so no component has to remember its own focus ring; `:root`
+  declares `color-scheme: light`.
+- `app/layout.tsx` loads `Lora` via `next/font/google` as `--font-lora`,
+  mapped to `font-serif` alongside the existing Geist Sans/Mono variables.
+
+### 02 — Brand assets and app identity
+
+- `public/scc-logo.png` and `app/icon.png` generated from `app/scc.png`:
+  cropped to the mark's measured bounding box with ~5% padding, white keyed
+  to transparent with a soft (anti-aliased) threshold rather than a hard
+  cutoff. The icon is composited onto an opaque `#FDF8F5` square instead, so
+  the open-knockout cross doesn't pick up dark browser chrome. `app/scc.png`
+  itself is untouched; `app/favicon.ico` is deleted so only one icon link is
+  emitted.
+- `components/Logo.tsx`: a shared `next/image` wrapper with an explicit size
+  prop, church-naming alt text (or `aria-hidden` when purely decorative), and
+  `preload` (not the Next.js 16-deprecated `priority` prop) for above-the-fold
+  use.
+- `metadata.description` in `app/layout.tsx` now names the church in plain
+  language.
+
+### 03 — Access gate restyle
+
+- `components/AccessGate.tsx` rebuilt on the new tokens: a centred white card
+  on the cream canvas, the shared `Logo`, an eyebrow/serif heading, a real
+  `<label>` on the access-code input, and `outline-none` removed entirely —
+  focus now comes from the ticket-01 global rule. The error message carries
+  `role="alert"` on the danger tokens. No `dark:` utilities remain, and
+  `handleSubmit`/the `/api/auth` call/`router.refresh()` are untouched.
+
+### 04 — Queue page shell
+
+- `components/QueueApp.tsx` rebuilt as a branded header (logo, eyebrow, serif
+  title, a gradient hairline through the three decorative palette tones into
+  brand scarlet) followed by two numbered cards: "Add your lyrics" (merged
+  paste box + drop zone with an `— or —` divider) and "Queue — N songs".
+- "Clear batch" moved out of the header into the queue card as "Clear all"
+  and now asks for confirmation before running — the one behavioural change
+  in this ticket, added as a guard around the existing `handleClear` call,
+  not a change to `setBatchState`.
+- The empty queue shows a friendly next-step message instead of "The queue is
+  empty."; the primary action reads "Format songs" and bulk download reads
+  "Download all (.zip)". Both live in a bottom action bar that stays reachable
+  without scrolling through a long queue, with enough reserved padding below
+  the queue card that it never covers the last row.
+- The batch summary is wrapped in `aria-live="polite"`; every handler
+  (`handleSubmit`, `handleAddFiles`, `runItems`, the results `useMemo`, the
+  `useSyncExternalStore` wiring) is unchanged.
+
+### 05 — Queue row restyle
+
+- `components/QueueRow.tsx`: status renders as a tinted pill with a dot and
+  plain wording (waiting / formatting / ready / "needs another try") rather
+  than bare coloured text, on the waiting/success/danger token pairs — never
+  brand scarlet. The source badge sits on the brand tint; the extracted-text
+  preview moved to the sunken surface; the error block gained a danger
+  left-border accent. Copy/Download/Remove all carry accessible names
+  identifying which file or item they act on, and the "Copied!" confirmation
+  is also announced via an `aria-live` region. Only `lib/types.ts`'s
+  `ItemStatus` union stayed put — only the display strings changed.
+
+### 06 — Accessibility and responsive verification pass
+
+- Verified with an automated pass (axe-core against both pages in every
+  reachable state, plus a scripted keyboard-tab walk) rather than assumed:
+  two real defects surfaced and were fixed — neither page had a `<main>`
+  landmark, and the per-row paste textarea (added in 05) had no accessible
+  name. Both are fixed; a re-run reports zero violations on the access gate
+  and the queue page.
+- The bottom action bar originally clipped "Format songs" onto two lines
+  inside a fixed-height button once "Download all (.zip)" no longer fit
+  beside it at 320px. Fixed by letting the bar wrap onto two full-height rows
+  (`flex-wrap` + `whitespace-nowrap` + `min-h-11` instead of a fixed `h-11`)
+  instead of squeezing wrapped text into a fixed box; confirmed by measuring
+  that the last queue row's controls stay clickable and uncovered at both
+  320px and 1280px.
+- Confirmed: `grep -r "dark:" app components` is empty, `npm test` passes
+  with no test file touched, `npm run lint` and `npm run build` are clean,
+  and the app still renders light and legible with the OS forced to dark.

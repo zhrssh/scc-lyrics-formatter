@@ -1,7 +1,8 @@
 "use client";
 
-import { useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { useId, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { QueueRow } from "./QueueRow";
+import { Logo } from "./Logo";
 import { config } from "@/lib/config";
 import { runBatch } from "@/lib/batch-runner";
 import { submitWithClassifiedRetry } from "@/lib/retry";
@@ -20,6 +21,12 @@ interface ResolvedFile {
 
 function sourceLabelFor(item: QueueItem): string {
   return item.source.kind === "file" ? item.source.fileName : "Pasted block";
+}
+
+function summaryText(succeeded: number, failed: number): string {
+  const succeededText = `${succeeded} song${succeeded === 1 ? "" : "s"} formatted`;
+  if (failed === 0) return `${succeededText}.`;
+  return `${succeededText}, ${failed} song${failed === 1 ? "" : "s"} need${failed === 1 ? "s" : ""} another try.`;
 }
 
 function downloadBlob(blob: Blob, filename: string) {
@@ -43,6 +50,7 @@ export function QueueApp() {
   const [signedOut, setSignedOut] = useState(false);
   const [summary, setSummary] = useState<{ succeeded: number; failed: number } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const pasteInputId = useId();
 
   const { filesByItem, allResolvedFiles } = useMemo(() => {
     const entries: { itemId: string; filename: string; content: string }[] = [];
@@ -155,6 +163,14 @@ export function QueueApp() {
     setSignedOut(false);
   }
 
+  function handleClearClick() {
+    if (
+      window.confirm("Clear the whole queue? This removes every song and any formatted results — this can't be undone.")
+    ) {
+      handleClear();
+    }
+  }
+
   async function runItems(toRun: QueueItem[]) {
     setBatchState((prev) => {
       const next = { ...prev.results };
@@ -238,145 +254,209 @@ export function QueueApp() {
     downloadBlob(blob, "lyrics.zip");
   }
 
+  const hasItems = items.length > 0;
+
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 px-4 py-8">
-      <div className="flex items-center justify-between">
-        <h1 className="text-lg font-semibold">SCC Lyrics Formatter</h1>
-        <button
-          type="button"
-          onClick={handleClear}
-          className="text-sm text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100"
-        >
-          Clear batch
-        </button>
-      </div>
-
-      {signedOut && (
-        <div className="flex items-center justify-between rounded-md bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950/40 dark:text-red-400">
-          <span>You&apos;ve been signed out.</span>
-          <button
-            type="button"
-            onClick={() => window.location.reload()}
-            className="rounded bg-red-600 px-2 py-1 text-xs font-medium text-white hover:bg-red-700"
-          >
-            Reload to sign in
-          </button>
+    <div className="flex flex-1 flex-col">
+      <header className="border-b border-line">
+        <div className="mx-auto flex w-full max-w-3xl items-center gap-3 px-4 py-5">
+          <Logo size={40} preload />
+          <div>
+            <p className="text-xs font-medium tracking-[0.14em] text-ink-muted uppercase">Solace of Christ Church</p>
+            <h1 className="font-serif text-xl text-ink">Lyrics Formatter</h1>
+          </div>
         </div>
-      )}
-
-      {notices.length > 0 && (
-        <ul className="space-y-1">
-          {notices.map((notice, index) => (
-            <li
-              key={`${notice}-${index}`}
-              className="flex items-start justify-between gap-2 rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:bg-amber-950/40 dark:text-amber-400"
-            >
-              <span>{notice}</span>
-              <button type="button" onClick={() => dismissNotice(index)} className="shrink-0 text-xs opacity-70">
-                Dismiss
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
-
-      {summary && (
-        <p className="rounded-md bg-zinc-100 px-3 py-2 text-sm dark:bg-zinc-800">
-          Batch finished: {summary.succeeded} succeeded, {summary.failed} failed.
-        </p>
-      )}
-
-      <section className="flex flex-col gap-2">
-        <textarea
-          value={pasteText}
-          onChange={(e) => setPasteText(e.target.value)}
-          placeholder="Paste lyrics here…"
-          rows={6}
-          className="w-full resize-y rounded-md border border-black/10 bg-transparent p-3 font-mono text-sm dark:border-white/10"
-        />
-        <div className="flex justify-end">
-          <button
-            type="button"
-            onClick={handleAddPaste}
-            disabled={pasteText.trim().length === 0}
-            className="rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-40 dark:bg-zinc-100 dark:text-zinc-900"
-          >
-            Add to queue
-          </button>
-        </div>
-      </section>
-
-      <section
-        onDragOver={(e) => {
-          e.preventDefault();
-          setIsDragging(true);
-        }}
-        onDragLeave={() => setIsDragging(false)}
-        onDrop={(e) => {
-          e.preventDefault();
-          setIsDragging(false);
-          void handleAddFiles(e.dataTransfer.files);
-        }}
-        className={`rounded-md border-2 border-dashed p-6 text-center text-sm transition-colors ${
-          isDragging ? "border-zinc-500 bg-zinc-50 dark:bg-zinc-900" : "border-black/15 dark:border-white/15"
-        }`}
-      >
-        <p className="text-zinc-500">Drag .txt or .pdf files here, or</p>
-        <button
-          type="button"
-          onClick={() => fileInputRef.current?.click()}
-          className="mt-2 rounded-md border border-black/15 px-3 py-1.5 text-sm hover:bg-zinc-50 dark:border-white/15 dark:hover:bg-zinc-900"
-        >
-          Browse files
-        </button>
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept=".txt,.pdf"
-          multiple
-          className="hidden"
-          onChange={(e) => {
-            if (e.target.files) void handleAddFiles(e.target.files);
-            e.target.value = "";
+        <div
+          className="h-1 w-full"
+          style={{
+            background:
+              "linear-gradient(to right, var(--color-brand-pale), var(--color-brand-soft), var(--color-brand-accent), var(--color-brand))",
           }}
         />
-      </section>
+      </header>
 
-      <ul className="flex flex-col gap-3">
-        {items.map((item) => (
-          <QueueRow
-            key={item.id}
-            item={item}
-            result={results[item.id]}
-            resolvedFiles={filesByItem[item.id] ?? []}
-            onEditText={(text) => handleEditText(item.id, text)}
-            onRemove={() => handleRemove(item.id)}
-            onRetry={() => void handleRetry(item.id)}
-            disabled={isSubmitting}
+      <main className={`mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 px-4 py-8 ${hasItems ? "pb-36" : ""}`}>
+        {signedOut && (
+          <div className="flex items-center justify-between gap-3 rounded-xl border-l-4 border-danger bg-danger-tint px-4 py-3 text-sm text-danger">
+            <span>You&apos;ve been signed out.</span>
+            <button
+              type="button"
+              onClick={() => window.location.reload()}
+              className="h-9 shrink-0 rounded-lg bg-danger px-3 text-xs font-medium text-white"
+            >
+              Reload to sign in
+            </button>
+          </div>
+        )}
+
+        {notices.length > 0 && (
+          <ul className="flex flex-col gap-2">
+            {notices.map((notice, index) => (
+              <li
+                key={`${notice}-${index}`}
+                className="flex items-start justify-between gap-3 rounded-xl bg-waiting-tint px-4 py-3 text-sm text-waiting"
+              >
+                <span>{notice}</span>
+                <button
+                  type="button"
+                  onClick={() => dismissNotice(index)}
+                  aria-label={`Dismiss notice: ${notice}`}
+                  className="shrink-0 text-xs font-medium underline decoration-dotted underline-offset-2"
+                >
+                  Dismiss
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        <div aria-live="polite">
+          {summary && (
+            <p className="rounded-xl bg-surface-sunken px-4 py-3 text-sm text-ink">
+              Batch finished: {summaryText(summary.succeeded, summary.failed)}
+            </p>
+          )}
+        </div>
+
+        <section className="rounded-2xl border border-line bg-surface p-5 shadow-sm">
+          <div className="mb-4 flex items-center gap-2.5">
+            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-brand text-sm font-semibold text-white">
+              1
+            </span>
+            <h2 className="font-serif text-lg text-ink">Add your lyrics</h2>
+          </div>
+
+          <label htmlFor={pasteInputId} className="mb-1.5 block text-sm font-medium text-ink">
+            Paste lyrics
+          </label>
+          <textarea
+            id={pasteInputId}
+            value={pasteText}
+            onChange={(e) => setPasteText(e.target.value)}
+            placeholder="Paste lyrics here…"
+            rows={6}
+            className="w-full resize-y rounded-lg border border-line-strong bg-surface p-3 font-mono text-sm text-ink transition-colors focus:border-brand"
           />
-        ))}
-      </ul>
+          <div className="mt-2 flex justify-end">
+            <button
+              type="button"
+              onClick={handleAddPaste}
+              disabled={pasteText.trim().length === 0}
+              className="h-11 rounded-lg bg-brand px-4 text-sm font-medium text-white transition-colors hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Add to queue
+            </button>
+          </div>
 
-      {items.length === 0 && <p className="text-center text-sm text-zinc-400">The queue is empty.</p>}
+          <div className="my-5 flex items-center gap-3 text-xs text-ink-subtle">
+            <span className="h-px flex-1 bg-line" />
+            or
+            <span className="h-px flex-1 bg-line" />
+          </div>
 
-      <div className="flex items-center justify-between gap-3">
-        <button
-          type="button"
-          onClick={() => void handleSubmit()}
-          disabled={isSubmitting || items.length === 0}
-          className="rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-40 dark:bg-zinc-100 dark:text-zinc-900"
-        >
-          {isSubmitting ? "Submitting…" : "Submit queue"}
-        </button>
-        <button
-          type="button"
-          onClick={() => void handleBulkDownload()}
-          disabled={allResolvedFiles.length === 0}
-          className="rounded-md border border-black/15 px-4 py-2 text-sm disabled:opacity-40 dark:border-white/15"
-        >
-          Download all as .zip
-        </button>
-      </div>
+          <div
+            onDragOver={(e) => {
+              e.preventDefault();
+              setIsDragging(true);
+            }}
+            onDragLeave={() => setIsDragging(false)}
+            onDrop={(e) => {
+              e.preventDefault();
+              setIsDragging(false);
+              void handleAddFiles(e.dataTransfer.files);
+            }}
+            className={`rounded-xl border-2 border-dashed p-6 text-center text-sm transition-colors ${
+              isDragging ? "border-brand bg-brand-tint" : "border-line-strong"
+            }`}
+          >
+            <p className="text-ink-muted">Drag .txt or .pdf files here, or</p>
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="mt-2 h-11 rounded-lg border border-line-strong px-4 text-sm text-ink hover:bg-surface-sunken"
+            >
+              Browse files
+            </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".txt,.pdf"
+              multiple
+              className="hidden"
+              onChange={(e) => {
+                if (e.target.files) void handleAddFiles(e.target.files);
+                e.target.value = "";
+              }}
+            />
+          </div>
+        </section>
+
+        <section className="rounded-2xl border border-line bg-surface p-5 shadow-sm">
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5">
+              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-brand text-sm font-semibold text-white">
+                2
+              </span>
+              <h2 className="font-serif text-lg text-ink">
+                Queue — {items.length} song{items.length === 1 ? "" : "s"}
+              </h2>
+            </div>
+            {hasItems && (
+              <button
+                type="button"
+                onClick={handleClearClick}
+                className="h-9 shrink-0 text-sm text-ink-muted underline decoration-dotted underline-offset-2 hover:text-ink"
+              >
+                Clear all
+              </button>
+            )}
+          </div>
+
+          {hasItems ? (
+            <ul className="flex flex-col gap-3">
+              {items.map((item) => (
+                <QueueRow
+                  key={item.id}
+                  item={item}
+                  result={results[item.id]}
+                  resolvedFiles={filesByItem[item.id] ?? []}
+                  onEditText={(text) => handleEditText(item.id, text)}
+                  onRemove={() => handleRemove(item.id)}
+                  onRetry={() => void handleRetry(item.id)}
+                  disabled={isSubmitting}
+                />
+              ))}
+            </ul>
+          ) : (
+            <p className="rounded-xl bg-surface-sunken px-4 py-6 text-center text-sm text-ink-muted">
+              Nothing queued yet. Paste a song or drop a file above to get started.
+            </p>
+          )}
+        </section>
+      </main>
+
+      {hasItems && (
+        <div className="fixed inset-x-0 bottom-0 z-20 border-t border-line bg-canvas/95 backdrop-blur">
+          <div className="mx-auto flex w-full max-w-3xl flex-wrap items-center gap-2 px-4 py-3">
+            <button
+              type="button"
+              onClick={() => void handleSubmit()}
+              disabled={isSubmitting || items.length === 0}
+              className="min-h-11 shrink-0 whitespace-nowrap rounded-lg bg-brand px-5 text-sm font-medium text-white transition-colors hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {isSubmitting ? "Formatting…" : "Format songs"}
+            </button>
+            <button
+              type="button"
+              onClick={() => void handleBulkDownload()}
+              disabled={allResolvedFiles.length === 0}
+              className="min-h-11 shrink-0 whitespace-nowrap rounded-lg border border-line-strong px-5 text-sm text-ink disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Download all (.zip)
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
